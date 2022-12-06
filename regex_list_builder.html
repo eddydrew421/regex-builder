@@ -1,0 +1,119 @@
+<html>
+<head><title>List Regex Builder</title></head>
+<body>
+<script>
+function ListChar() {
+	this.depth = null;
+	this.prefixes = 0;
+	this.subList = {};
+	this.terminal = false;
+}
+ListChar.prototype = {
+	add: function(str) {
+		var reserved = "[\\^{}$.|?*+()";
+		if (!str.length) {
+			this.terminal = true;
+			return;
+		}
+		var n = str.charAt(0);
+		if (reserved.indexOf(n) !== -1) {
+			n = "\\" + n;
+		}
+		if (!this.subList[n]) {
+			this.subList[n] = new ListChar();
+			this.prefixes += 1;
+		}
+		this.subList[n].add(str.substr(1));
+	},
+	toString: function() {
+		var prefix = "";
+		if (document.getElementById("fast").checked) {
+			prefix = "?:";
+		}
+		var subVals = [];
+		for (var n in this.subList) {
+			var node = this.subList[n];
+			subVals.push(n + node.toString());
+		}
+		if (!subVals.length) {
+			return '';
+		}
+		if (!this.terminal && subVals.length === 1) {
+			return subVals[0];
+		}
+		var out = "";
+		if ((this.terminal && subVals.join('').length === subVals.length-1)
+				|| subVals.join('').length === subVals.length) {
+			out = '[' + subVals.join('') + ']';
+		} else {
+			out = '(' + prefix + subVals.join('|') + ')';
+		}
+		if (this.terminal) {
+			out += "?";
+		}
+		return out;
+	},
+	compress: function() {
+		for (var char in this.subList) {
+			var node = this.subList[char];
+			if (node.prefixes !== 1) continue;
+			delete this.subList[char];
+			for (var c in node.subList) {
+				this.subList[char+c] = node.subList[c];
+			}
+		}
+	},
+	computeDepth: function() {
+		var max = 0;
+		for (var k in this.subList) {
+			var node = this.subList[k];
+			var depth = node.computeDepth();
+			if (depth > max) {
+				max = depth;
+			}
+		}
+		return this.depth = 1 + max;
+	}
+};
+
+function build() {
+	var list = new ListChar();
+	var input = document.getElementById("input").value.split("\n");
+	for (var i = 0; i < input.length; i++) {
+		if (document.getElementById("trim").checked) {
+			input[i] = input[i].replace(/^\s*(.*?)\s*$/, "$1")
+		}
+		if (document.getElementById("case").checked) {
+			input[i] = input[i].toLowerCase();
+		}
+		if (input[i].length > 0) {
+			list.add(input[i]);
+		}
+	}
+
+	list.compress();
+	var output = document.getElementById("output");
+	output.value = "";
+	if (document.getElementById("case").checked) {
+		output.value += "(?i)";
+	}
+	output.value += list.toString();
+}
+
+</script>
+<div style="clear:right; margin:0 20px">
+	<button onclick="build()">Build Regex</button>
+	<input type="checkbox" checked="checked" id="trim"><label for="trim">Trim leading/trailing white space</label> <input type="checkbox" id="case"><label for="case">Case insensitive</label>
+	<input type="radio" name="style" id="fast" checked="checked">Non-capturing groups (faster) <input type="radio" name="style" id="small">Capturing groups (smaller) 
+</div>
+<div style="float:left; margin:0 20px">
+	<p>Enter words (one per line):<br>
+	<textarea id="input" style="width:200px;height:600px;"></textarea></p>
+</div>
+
+<div style="float:left; margin:0 20px">
+	<p>Regex:<br>
+	<textarea id="output" style="width:600px;height:600px;" readonly="readonly"></textarea></p>
+</div>
+</body>
+</html>
